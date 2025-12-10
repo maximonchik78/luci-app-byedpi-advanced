@@ -1,5 +1,12 @@
 #!/bin/sh
 
+# Получаем абсолютный путь к директории скрипта
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BASE_DIR="$SCRIPT_DIR"
+
+# Далее во всех путях используйте $BASE_DIR
+cp "$BASE_DIR/luasrc/controller/byedpi.lua" "$CONTROLLER_DIR/"
+
 # ================================================
 # Установщик luci-app-byedpi-advanced для OpenWrt
 # Версия: 2.0
@@ -198,6 +205,11 @@ install_bin_files() {
         echo -e "${GREEN}✓ Менеджер установлен${NC}"
     fi
 }
+
+chmod 755 /usr/sbin/byedpi-autodetect
+chmod 755 /usr/sbin/byedpi-manager
+chmod 755 /etc/init.d/byedpi
+chmod 755 /etc/byedpi/scripts/*.sh 2>/dev/null || true
 
 # Установка ByeDPI (если не установлен)
 install_byedpi() {
