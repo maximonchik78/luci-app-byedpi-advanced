@@ -39,7 +39,7 @@ TEST_URLS=(
 )
 
 log() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG"
+    printf "%b" "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG"
     logger -t "byedpi-autodetect" "$1"
 }
 
@@ -48,7 +48,7 @@ check_dependencies() {
     
     for cmd in curl wget pgrep kill uci; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
-            missing+=("$cmd")
+            missing="$$cmd")
         fi
     done
     
@@ -100,7 +100,7 @@ test_connection() {
     local opts=("-s" "-I" "--connect-timeout" "$timeout" "--max-time" "15")
     
     if [ -n "$proxy" ]; then
-        opts+=("--proxy" "$proxy")
+        opts="$--proxy" "$proxy")
     fi
     
     # Пробуем разные методы проверки
