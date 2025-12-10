@@ -1,1 +1,22 @@
+config settings
+    option enabled '1'
+    option mode '0'
+    option port '443'
+    option ipv6 '0'
+    option autodetect '1'
+    option autodetect_interval '3600'
+    option test_urls 'https://rutracker.org https://vk.com https://telegram.org'
+    option blacklist '/etc/byedpi/blacklist.txt'
+    option whitelist '/etc/byedpi/whitelist.txt'
+    option log_level '1'
+    option interface 'br-lan'
 
+config schedule
+    option enabled '0'
+    option start_time '00:00'
+    option end_time '06:00'
+    option days 'mon,tue,wed,thu,fri,sat,sun'
+
+config statistics
+    option enabled '0'
+    option save_interval '300'
