@@ -1,63 +1,9 @@
-FROM openwrtorg/sdk:latest AS builder
-
-ARG SDK_ARCH
-ENV SDK_ARCH=${SDK_ARCH:-x86_64}
+FROM openwrtorg/sdk:latest
 
 WORKDIR /build
-
-# Устанавливаем необходимые зависимости для сборки
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    git \
-    subversion \
-    python3 \
-    python3-distutils \
-    wget \
-    curl \
-    libncurses-dev \
-    zlib1g-dev \
-    gawk \
-    unzip \
-    rsync \
-    && rm -rf /var/lib/apt/lists/*
-
-# Копируем исходники пакета
 COPY . /build/luci-app-byedpi-advanced/
 
-# Создаем структуру для сборки
-RUN mkdir -p /build/openwrt/package/luci-app-byedpi-advanced
-
-# Копируем файлы пакета
-RUN cp -r /build/luci-app-byedpi-advanced/* /build/openwrt/package/luci-app-byedpi-advanced/
-
-# Переходим в директорию SDK
-WORKDIR /build/openwrt
-
-# Настраиваем feeds для LuCI
-RUN echo "src-git luci https://git.openwrt.org/project/luci.git;openwrt-24.03" >> feeds.conf.default && \
-    echo "src-git packages https://git.openwrt.org/feed/packages.git;openwrt-24.03" >> feeds.conf.default
-
-# Обновляем и устанавливаем feeds
 RUN ./scripts/feeds update -a && \
-    ./scripts/feeds install -a
-
-# Конфигурируем сборку только нашего пакета
-RUN echo "CONFIG_TARGET_$SDK_ARCH=y" > .config && \
-    echo "CONFIG_PACKAGE_luci-app-byedpi-advanced=y" >> .config
-
-# Загружаем конфигурацию
-RUN make defconfig
-
-# Собираем пакет
-RUN make package/luci-app-byedpi-advanced/compile V=s -j$(nproc)
-
-# Копируем собранные пакеты в выходную директорию
-RUN mkdir -p /output && \
-    find bin -name "*.ipk" -exec cp {} /output/ \; && \
-    find bin -name "Packages*" -exec cp {} /output/ \;
-
-# Создаем манифест пакетов
-RUN echo "Built packages for $SDK_ARCH:" > /output/packages.manifest && \
-    ls -la /output/*.ipk >> /output/packages.manifest
-
-WORKDIR /output
+    ./scripts/feeds install -a && \
+    make defconfig && \
+    make package/luci-app-byedpi-advanced/compile V=s
