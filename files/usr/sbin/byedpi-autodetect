@@ -29,7 +29,7 @@ declare -A METHODS=(
 # Порты для тестирования
 PORTS=("443" "80" "8080" "53")
 
-# Тестовые URL (проверяем разные типы блокировок)
+# Тестовые URL
 TEST_URLS=(
     "https://rutracker.org"
     "https://vk.com"
@@ -38,11 +38,14 @@ TEST_URLS=(
     "https://github.com"
 )
 
+# Функция логирования
 log() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG"
-    logger -t "byedpi-autodetect" "$1"
+    local message="$1"
+    echo -e "$(date '+%Y-%m-%d %H:%M:%S') - $message" | tee -a "$LOG"
+    logger -t "byedpi-autodetect" "$message"
 }
 
+# Проверка зависимостей
 check_dependencies() {
     local missing=()
     
@@ -65,6 +68,7 @@ check_dependencies() {
     return 0
 }
 
+# Блокировка
 acquire_lock() {
     exec 200>"$LOCKFILE"
     if ! flock -n 200; then
@@ -75,40 +79,32 @@ acquire_lock() {
     return 0
 }
 
+# Освобождение блокировки
 release_lock() {
     rm -f "$PIDFILE"
     flock -u 200
     rm -f "$LOCKFILE"
 }
 
+# Остановка ByeDPI
 stop_byedpi() {
     if pgrep -f "/usr/sbin/byedpi" >/dev/null; then
         log "Останавливаю ByeDPI..."
         pkill -f "/usr/sbin/byedpi"
         sleep 2
-        # Убеждаемся, что процесс остановлен
         pkill -9 -f "/usr/sbin/byedpi" 2>/dev/null || true
     fi
 }
 
+# Проверка соединения
 test_connection() {
     local url="$1"
     local timeout="${2:-10}"
-    local proxy="${3:-}"
     
-    local curl_cmd="curl"
-    local opts=("-s" "-I" "--connect-timeout" "$timeout" "--max-time" "15")
-    
-    if [ -n "$proxy" ]; then
-        opts+=("--proxy" "$proxy")
-    fi
-    
-    # Пробуем разные методы проверки
-    if $curl_cmd "${opts[@]}" "$url" 2>/dev/null | grep -q -E "HTTP.*200|HTTP.*30[0-9]"; then
+    if curl -s -I --connect-timeout "$timeout" "$url" 2>/dev/null | grep -q -E "HTTP.*200|HTTP.*30[0-9]"; then
         return 0
     fi
     
-    # Пробуем wget
     if wget --spider --timeout="$timeout" -t 1 "$url" >/dev/null 2>&1; then
         return 0
     fi
@@ -116,6 +112,7 @@ test_connection() {
     return 1
 }
 
+# Тестирование метода обхода
 test_bypass_method() {
     local method="$1"
     local port="$2"
@@ -123,7 +120,6 @@ test_bypass_method() {
     
     log "Тестирование: метод=$method, порт=$port, URL=$test_url"
     
-    # Формируем команду
     local cmd="/usr/sbin/byedpi"
     
     if [ "$method" != "0" ] && [ -n "${METHODS[$method]}" ]; then
@@ -134,20 +130,16 @@ test_bypass_method() {
     
     cmd="$cmd -p $port --daemon"
     
-    # Запускаем
     eval "$cmd" >/dev/null 2>&1 &
     local pid=$!
     
-    # Ждем инициализации
     sleep 3
     
-    # Проверяем, запустился ли процесс
     if ! ps -p "$pid" >/dev/null 2>&1; then
         log "${RED}Ошибка запуска ByeDPI с параметрами: method=$method, port=$port${NC}"
         return 1
     fi
     
-    # Проверяем соединение
     local success=0
     for i in {1..3}; do
         if test_connection "$test_url" 5; then
@@ -157,7 +149,6 @@ test_bypass_method() {
         sleep 2
     done
     
-    # Останавливаем тестовый процесс
     kill "$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
     
@@ -170,6 +161,7 @@ test_bypass_method() {
     fi
 }
 
+# Обнаружение лучшего метода
 detect_best_method() {
     local best_method="0"
     local best_port="443"
@@ -177,8 +169,6 @@ detect_best_method() {
     
     log "Начинаю сканирование методов обхода DPI..."
     
-    # Сначала проверяем, есть ли DPI вообще
-    log "Проверяю наличие DPI блокировок..."
     local dpi_detected=0
     for url in "${TEST_URLS[@]}"; do
         if ! test_connection "$url" 10; then
@@ -194,7 +184,6 @@ detect_best_method() {
         return 0
     fi
     
-    # Тестируем комбинации
     for port in "${PORTS[@]}"; do
         for method in 0 1 2 3 4 5 6; do
             for test_url in "${TEST_URLS[@]}"; do
@@ -220,13 +209,13 @@ detect_best_method() {
     fi
 }
 
+# Обновление конфигурации
 update_config() {
     local method="$1"
     local port="$2"
     
     log "Обновляю конфигурацию: method=$method, port=$port"
     
-    # Обновляем конфиг
     uci set byedpi.@settings[0].mode="$method"
     uci set byedpi.@settings[0].port="$port"
     uci commit byedpi
@@ -234,31 +223,26 @@ update_config() {
     log "Конфигурация обновлена"
 }
 
+# Основная функция
 main() {
     log "=== Запуск автоподбора параметров ByeDPI ==="
     
-    # Проверяем зависимости
     if ! check_dependencies; then
         exit 1
     fi
     
-    # Блокировка
     if ! acquire_lock; then
         exit 1
     fi
     
-    # Останавливаем текущий byedpi
     stop_byedpi
     
-    # Обнаруживаем лучший метод
     local result
     if result=$(detect_best_method); then
         IFS=':' read -r best_method best_port <<< "$result"
         
-        # Обновляем конфиг
         update_config "$best_method" "$best_port"
         
-        # Запускаем с новыми параметрами
         if [ -x "/etc/init.d/byedpi" ]; then
             /etc/init.d/byedpi restart
             log "${GREEN}ByeDPI перезапущен с новыми параметрами${NC}"
@@ -274,7 +258,6 @@ main() {
         fi
     fi
     
-    # Освобождаем блокировку
     release_lock
     
     log "=== Автоподбор завершен ==="
