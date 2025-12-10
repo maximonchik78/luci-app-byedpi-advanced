@@ -69,7 +69,7 @@ jobs:
   package:
     runs-on: ubuntu-latest
     needs: [check-syntax, test-install]
-    if: github.event_name == 'release'
+    if: github.event_name == 'push' || github.event_name == 'release'
     
     steps:
     - name: Checkout code
