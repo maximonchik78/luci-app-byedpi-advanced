@@ -1,0 +1,79 @@
+name: Auto-fix POSIX Compatibility
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  fix-scripts:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Необходимо для создания коммитов
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref }}
+    
+    - name: Setup Git
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+    
+    - name: Install shellcheck
+      run: sudo apt-get update && sudo apt-get install -y shellcheck
+    
+    - name: Fix POSIX compatibility issues
+      run: |
+        echo "=== Fixing POSIX compatibility ==="
+        
+        # Список файлов для исправления
+        FILES_TO_FIX="install.sh uninstall.sh files/usr/sbin/byedpi-autodetect"
+        
+        for file in $FILES_TO_FIX; do
+          if [ -f "$file" ]; then
+            echo "Fixing $file..."
+            
+            # 1. Replace echo -e with printf
+            sed -i "s/echo -e \"/printf \"%b\" \"/g" "$file"
+            
+            # 2. Replace [[ with [
+            sed -i "s/\[\[ /[ /g" "$file"
+            sed -i "s/ \]\]/ ]/g" "$file"
+            
+            # 3. Replace function keyword
+            sed -i "s/function \([a-zA-Z_][a-zA-Z0-9_]*\)()/\1()/g" "$file"
+            
+            # 4. Fix array syntax (simplified)
+            sed -i "s/+=(\"/=\"\$/g" "$file"
+            
+            echo "✓ $file fixed"
+          fi
+        done
+        
+        echo "=== Running shellcheck to verify ==="
+        shellcheck --shell=sh $FILES_TO_FIX || true
+    
+    - name: Create Pull Request with fixes
+      if: github.event_name == 'push'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        title: "Auto-fix: POSIX compatibility for shell scripts"
+        body: |
+          This PR fixes POSIX compatibility issues in shell scripts:
+          - Replaced `echo -e` with `printf`
+          - Replaced `[[ ]]` with `[ ]`
+          - Removed bash-specific array syntax
+          - Made scripts compatible with `/bin/sh`
+          
+          Fixes shellcheck warnings:
+          - SC3037: In POSIX sh, echo flags are undefined
+          - SC3010: In POSIX sh, [[ ]] is undefined
+          - SC3024: In POSIX sh, += is undefined
+        branch: fix/posix-compatibility
+        delete-branch: true
+        commit-message: "fix: POSIX compatibility for shell scripts"
