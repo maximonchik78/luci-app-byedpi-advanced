@@ -1,59 +1,50 @@
-name: Basic Checks
+name: Build OpenWrt Package
 
-on: [push, pull_request]
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:  # Allow manual triggers
 
 jobs:
-  lint:
+  build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Собираем для нескольких популярных архитектур
+        sdk: [
+          "x86_64", 
+          "aarch64_cortex-a53",
+          "aarch64_cortex-a72",
+          "arm_cortex-a7_neon-vfpv4",
+          "mipsel_24kc"
+        ]
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
     
-    - name: Check file structure
-      run: |
-        echo "Checking required files..."
-        [ -f "Makefile" ] || echo "⚠ Missing: Makefile"
-        [ -f "install.sh" ] || echo "⚠ Missing: install.sh"
-        [ -f "README.md" ] || echo "⚠ Missing: README.md"
-        [ -d "luasrc" ] || echo "⚠ Missing: luasrc directory"
-        [ -d "files" ] || echo "⚠ Missing: files directory"
-        
-        # Проверяем наличие критических файлов
-        REQUIRED_FILES=(
-          "files/etc/init.d/byedpi"
-          "luasrc/controller/byedpi.lua"
-          "luasrc/model/cbi/byedpi.lua"
-        )
-        
-        for file in "${REQUIRED_FILES[@]}"; do
-          if [ -f "$file" ]; then
-            echo "✓ $file"
-          else
-            echo "✗ Missing: $file"
-            exit 1
-          fi
-        done
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
     
-    - name: Check Lua syntax
-      run: |
-        if command -v lua5.3 &> /dev/null; then
-          echo "Checking Lua files..."
-          find . -name "*.lua" -type f -exec lua5.3 -l {} \;
-        else
-          echo "Lua not installed, skipping syntax check"
-        fi
+    - name: Build for ${{ matrix.sdk }}
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: .github/docker/Dockerfile.build
+        push: false
+        tags: byedpi-builder:${{ matrix.sdk }}
+        build-args: |
+          SDK_ARCH=${{ matrix.sdk }}
     
-    - name: Check shell scripts
-      run: |
-        if command -v shellcheck &> /dev/null; then
-          echo "Checking shell scripts with shellcheck..."
-          find . -name "*.sh" -type f -exec shellcheck {} \;
-        else
-          echo "shellcheck not installed, skipping"
-        fi
-    
-    - name: Verify install script
-      run: |
-        echo "Verifying install script..."
-        bash -n install.sh && echo "✓ install.sh syntax OK" || exit 1
-        bash -n uninstall.sh && echo "✓ uninstall.sh syntax OK" || exit 1
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: packages-${{ matrix.sdk }}
+        path: |
+          output/*.ipk
+          output/*.manifest
+        if-no-files-found: error
