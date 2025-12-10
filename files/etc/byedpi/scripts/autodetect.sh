@@ -3,7 +3,6 @@
 # Скрипт автоподбора для ByeDPI
 # Используется byedpi-autodetect
 
-CONFIG="/etc/config/byedpi"
 LOG="/tmp/byedpi-detection.log"
 
 log() {
