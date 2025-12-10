@@ -1,0 +1,25 @@
+# Build artifacts
+*.ipk
+*.tar.gz
+*.tar.xz
+/data.tar.gz
+/control.tar.gz
+/debian-binary
+
+# Logs
+*.log
+/tmp/
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build directories
+/build/
+/output/
+/ipk_package/
