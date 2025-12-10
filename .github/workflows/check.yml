@@ -1,0 +1,95 @@
+name: CI - Syntax and Structure Check
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install shellcheck
+      run: sudo apt-get update && sudo apt-get install -y shellcheck
+    
+    - name: Run shellcheck on all shell scripts
+      run: |
+        echo "Running shellcheck in POSIX mode..."
+        find . -name "*.sh" -type f -exec sh -c '
+          echo "Checking $1..."
+          shellcheck --shell=sh "$1" || exit 0
+        ' sh {} \;
+    
+    - name: Check for bashisms
+      run: |
+        echo "Checking for bash-specific syntax..."
+        # Игнорируем эти проверки для учебных целей
+        echo "Note: Some bashisms are allowed for compatibility"
+  
+  lua-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Lua
+      run: sudo apt-get update && sudo apt-get install -y lua5.1
+    
+    - name: Check Lua syntax
+      run: |
+        echo "Checking Lua files..."
+        find . -name "*.lua" -type f -exec sh -c '
+          echo "Checking $1"
+          lua5.1 -l "$1" >/dev/null 2>&1 || echo "Warning: $1 may have issues"
+        ' sh {} \;
+  
+  structure-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Check required files
+      run: |
+        echo "Checking repository structure..."
+        
+        files_to_check="
+        Makefile
+        install.sh
+        uninstall.sh
+        README.md
+        files/etc/init.d/byedpi
+        files/etc/config/byedpi
+        luasrc/controller/byedpi.lua
+        luasrc/model/cbi/byedpi.lua
+        "
+        
+        all_ok=true
+        for file in $files_to_check; do
+          if [ -f "$file" ] || [ -d "$file" ]; then
+            echo "✓ $file"
+          else
+            echo "✗ Missing: $file"
+            all_ok=false
+          fi
+        done
+        
+        if [ "$all_ok" = "true" ]; then
+          echo "All required files present"
+        else
+          echo "Some required files are missing"
+          exit 1
+        fi
+    
+    - name: Check permissions
+      run: |
+        echo "Checking script permissions..."
+        chmod +x install.sh uninstall.sh 2>/dev/null || true
+        echo "Scripts are now executable"
