@@ -4,13 +4,47 @@ on:
   push:
     tags:
       - 'v*'
+  pull_request:
+  workflow_dispatch:  # Allow manual triggers
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Собираем для нескольких популярных архитектур
+        sdk: [
+          "x86_64", 
+          "aarch64_cortex-a53",
+          "aarch64_cortex-a72",
+          "arm_cortex-a7_neon-vfpv4",
+          "mipsel_24kc"
+        ]
+    
     steps:
-      - uses: actions/checkout@v4
-      - name: Build luci-app-byedpi-advanced
-        run: |
-          echo "Building package..."
-          # Здесь логика сборки
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Build for ${{ matrix.sdk }}
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: .github/docker/Dockerfile.build
+        push: false
+        tags: byedpi-builder:${{ matrix.sdk }}
+        build-args: |
+          SDK_ARCH=${{ matrix.sdk }}
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: packages-${{ matrix.sdk }}
+        path: |
+          output/*.ipk
+          output/*.manifest
+        if-no-files-found: error
