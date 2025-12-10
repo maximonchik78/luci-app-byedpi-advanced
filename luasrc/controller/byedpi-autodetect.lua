@@ -1,8 +1,8 @@
 #!/bin/sh
 
-# Автоподбор параметров для ByeDPI
-# Версия: 2.0
-# Автор: maximonchik78
+-- LuCI controller for ByeDPI auto-detection
+-- Version: 1.0
+-- Author: maximonchik78
 
 CONFIG="/etc/config/byedpi"
 LOG="/tmp/byedpi-autodetect.log"
