@@ -1,22 +1,14 @@
 #!/bin/sh
 
-# Получаем абсолютный путь к директории скрипта
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BASE_DIR="$SCRIPT_DIR"
-
-# Далее во всех путях используйте $BASE_DIR
-cp "$BASE_DIR/luasrc/controller/byedpi.lua" "$CONTROLLER_DIR/"
-
-# ================================================
-# Установщик luci-app-byedpi-advanced для OpenWrt
-# Версия: 2.0
+# ============================================================================
+# Установщик luci-app-byedpi-advanced
 # Автор: maximonchik78
 # GitHub: https://github.com/maximonchik78/luci-app-byedpi-advanced
-# ================================================
+# ============================================================================
 
 set -e
 
-# Цвета для вывода
+# Цвета для вывода (без -e, используем printf)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -33,10 +25,17 @@ INIT_DIR="/etc/init.d"
 USR_BIN_DIR="/usr/sbin"
 USR_LIBEXEC_DIR="/usr/libexec/rpcd"
 
+# Функция для цветного вывода
+print_color() {
+    local color=$1
+    local message=$2
+    printf "%b%s%b\n" "$color" "$message" "$NC"
+}
+
 # Проверка на root
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
-        echo -e "${RED}Ошибка: Этот скрипт должен быть запущен от root!${NC}"
+        print_color "$RED" "Ошибка: Этот скрипт должен быть запущен от root!"
         exit 1
     fi
 }
@@ -44,115 +43,116 @@ check_root() {
 # Проверка OpenWrt
 check_openwrt() {
     if [ ! -f "/etc/openwrt_release" ]; then
-        echo -e "${YELLOW}Предупреждение: Не похоже на OpenWrt систему!${NC}"
-        read -p "Продолжить установку? (y/N): " -n 1 -r
-        echo
-        [[ $REPLY =~ ^[Yy]$ ]] || exit 1
+        print_color "$YELLOW" "Предупреждение: Не похоже на OpenWrt систему!"
+        printf "Продолжить установку? (y/N): "
+        read -r reply
+        case "$reply" in
+            [Yy]*) ;;
+            *) exit 1 ;;
+        esac
     fi
 }
 
 # Проверка зависимостей
 check_dependencies() {
-    echo -e "${BLUE}Проверка зависимостей...${NC}"
+    print_color "$BLUE" "Проверка зависимостей..."
     
-    local missing=()
+    local missing=""
     
     # Проверяем LuCI
     if [ ! -d "/usr/lib/lua/luci" ]; then
-        missing+=("luci")
+        missing="$missing luci"
     fi
     
     # Проверяем curl для автоподбора
     if ! command -v curl >/dev/null 2>&1; then
-        missing+=("curl")
+        missing="$missing curl"
     fi
     
     # Проверяем uci
     if ! command -v uci >/dev/null 2>&1; then
-        missing+=("uci")
+        missing="$missing uci"
     fi
     
-    if [ ${#missing[@]} -gt 0 ]; then
-        echo -e "${YELLOW}Отсутствуют зависимости: ${missing[*]}${NC}"
-        echo "Установите их командой: opkg install ${missing[*]}"
-        read -p "Продолжить установку? (y/N): " -n 1 -r
-        echo
-        [[ $REPLY =~ ^[Yy]$ ]] || exit 1
+    if [ -n "$missing" ]; then
+        print_color "$YELLOW" "Отсутствуют зависимости: $missing"
+        echo "Установите их командой: opkg install$missing"
+        printf "Продолжить установку? (y/N): "
+        read -r reply
+        case "$reply" in
+            [Yy]*) ;;
+            *) exit 1 ;;
+        esac
     fi
 }
 
 # Создание директорий
 create_directories() {
-    echo -e "${BLUE}Создание директорий...${NC}"
+    print_color "$BLUE" "Создание директорий..."
     
-    mkdir -p "$CONTROLLER_DIR"
-    mkdir -p "$MODEL_DIR"
-    mkdir -p "$VIEW_DIR"
-    mkdir -p "$CONFIG_DIR"
-    mkdir -p "$INIT_DIR"
-    mkdir -p "$USR_BIN_DIR"
-    mkdir -p "$USR_LIBEXEC_DIR"
-    mkdir -p "/etc/byedpi/scripts"
-    mkdir -p "/var/log/byedpi"
+    for dir in "$CONTROLLER_DIR" "$MODEL_DIR" "$VIEW_DIR" "$CONFIG_DIR" "$INIT_DIR" \
+               "$USR_BIN_DIR" "$USR_LIBEXEC_DIR" "/etc/byedpi/scripts" "/var/log/byedpi"; do
+        mkdir -p "$dir"
+    done
     
-    echo -e "${GREEN}✓ Директории созданы${NC}"
+    print_color "$GREEN" "✓ Директории созданы"
 }
 
 # Копирование файлов LuCI
 install_luci_files() {
-    echo -e "${BLUE}Установка файлов LuCI...${NC}"
+    print_color "$BLUE" "Установка файлов LuCI..."
     
     # Копируем контроллер
     if [ -f "./luasrc/controller/byedpi.lua" ]; then
         cp "./luasrc/controller/byedpi.lua" "$CONTROLLER_DIR/"
-        echo -e "${GREEN}✓ Контроллер установлен${NC}"
+        print_color "$GREEN" "✓ Контроллер установлен"
     else
-        echo -e "${YELLOW}⚠ Файл контроллера не найден${NC}"
+        print_color "$YELLOW" "⚠ Файл контроллера не найден"
     fi
     
     # Копируем CBI модель
     if [ -f "./luasrc/model/cbi/byedpi.lua" ]; then
         cp "./luasrc/model/cbi/byedpi.lua" "$MODEL_DIR/"
-        echo -e "${GREEN}✓ CBI модель установлена${NC}"
+        print_color "$GREEN" "✓ CBI модель установлена"
     else
-        echo -e "${YELLOW}⚠ Файл CBI модели не найден${NC}"
+        print_color "$YELLOW" "⚠ Файл CBI модели не найден"
     fi
     
     # Копируем HTML шаблоны
     if [ -d "./luasrc/view/byedpi" ]; then
         cp -r "./luasrc/view/byedpi/"* "$VIEW_DIR/"
-        echo -e "${GREEN}✓ HTML шаблоны установлены${NC}"
+        print_color "$GREEN" "✓ HTML шаблоны установлены"
     else
-        echo -e "${YELLOW}⚠ Директория с шаблонами не найдена${NC}"
+        print_color "$YELLOW" "⚠ Директория с шаблонами не найдена"
     fi
     
     # Копируем JSON RPC
     if [ -f "./files/usr/libexec/rpcd/byedpi" ]; then
         cp "./files/usr/libexec/rpcd/byedpi" "$USR_LIBEXEC_DIR/"
         chmod 755 "$USR_LIBEXEC_DIR/byedpi"
-        echo -e "${GREEN}✓ JSON RPC скрипт установлен${NC}"
+        print_color "$GREEN" "✓ JSON RPC скрипт установлен"
     fi
 }
 
 # Копирование конфигурационных файлов
 install_config_files() {
-    echo -e "${BLUE}Установка конфигурационных файлов...${NC}"
+    print_color "$BLUE" "Установка конфигурационных файлов..."
     
     # Конфиг byedpi
     if [ -f "./files/etc/config/byedpi" ]; then
         if [ -f "$CONFIG_DIR/byedpi" ]; then
-            echo -e "${YELLOW}⚠ Конфиг byedpi уже существует, создаю резервную копию...${NC}"
+            print_color "$YELLOW" "⚠ Конфиг byedpi уже существует, создаю резервную копию..."
             cp "$CONFIG_DIR/byedpi" "$CONFIG_DIR/byedpi.backup.$(date +%s)"
         fi
         cp "./files/etc/config/byedpi" "$CONFIG_DIR/"
-        echo -e "${GREEN}✓ Конфигурационный файл установлен${NC}"
+        print_color "$GREEN" "✓ Конфигурационный файл установлен"
     else
-        echo -e "${YELLOW}⚠ Конфигурационный файл не найден, создаю базовый...${NC}"
+        print_color "$YELLOW" "⚠ Конфигурационный файл не найден, создаю базовый..."
         cat > "$CONFIG_DIR/byedpi" << 'EOF'
 config settings
     option enabled '1'
     option mode '0'
-    option port '443,80'
+    option port '443'
     option ipv6 '0'
     option autodetect '1'
     option autodetect_interval '3600'
@@ -167,211 +167,207 @@ EOF
     if [ -d "./files/etc/byedpi/scripts" ]; then
         cp -r "./files/etc/byedpi/scripts/"* "/etc/byedpi/scripts/"
         chmod +x /etc/byedpi/scripts/*.sh 2>/dev/null || true
-        echo -e "${GREEN}✓ Скрипты установлены${NC}"
+        print_color "$GREEN" "✓ Скрипты установлены"
     fi
 }
 
 # Копирование init скриптов
 install_init_scripts() {
-    echo -e "${BLUE}Установка init скриптов...${NC}"
+    print_color "$BLUE" "Установка init скриптов..."
     
     if [ -f "./files/etc/init.d/byedpi" ]; then
         cp "./files/etc/init.d/byedpi" "$INIT_DIR/"
         chmod 755 "$INIT_DIR/byedpi"
-        echo -e "${GREEN}✓ Init скрипт установлен${NC}"
+        print_color "$GREEN" "✓ Init скрипт установлен"
     else
-        echo -e "${RED}✗ Init скрипт не найден!${NC}"
+        print_color "$RED" "✗ Init скрипт не найден!"
         exit 1
     fi
 }
 
 # Копирование исполняемых файлов
 install_bin_files() {
-    echo -e "${BLUE}Установка исполняемых файлов...${NC}"
+    print_color "$BLUE" "Установка исполняемых файлов..."
     
     # Основной скрипт автоподбора
     if [ -f "./files/usr/sbin/byedpi-autodetect" ]; then
         cp "./files/usr/sbin/byedpi-autodetect" "$USR_BIN_DIR/"
         chmod 755 "$USR_BIN_DIR/byedpi-autodetect"
-        echo -e "${GREEN}✓ Скрипт автоподбора установлен${NC}"
+        print_color "$GREEN" "✓ Скрипт автоподбора установлен"
     else
-        echo -e "${YELLOW}⚠ Скрипт автоподбора не найден${NC}"
+        print_color "$YELLOW" "⚠ Скрипт автоподбора не найден"
     fi
     
     # Менеджер byedpi
     if [ -f "./files/usr/sbin/byedpi-manager" ]; then
         cp "./files/usr/sbin/byedpi-manager" "$USR_BIN_DIR/"
         chmod 755 "$USR_BIN_DIR/byedpi-manager"
-        echo -e "${GREEN}✓ Менеджер установлен${NC}"
+        print_color "$GREEN" "✓ Менеджер установлен"
     fi
 }
 
-chmod 755 /usr/sbin/byedpi-autodetect
-chmod 755 /usr/sbin/byedpi-manager
-chmod 755 /etc/init.d/byedpi
-chmod 755 /etc/byedpi/scripts/*.sh 2>/dev/null || true
-
 # Установка ByeDPI (если не установлен)
 install_byedpi() {
-    echo -e "${BLUE}Проверка ByeDPI...${NC}"
+    print_color "$BLUE" "Проверка ByeDPI..."
     
     if [ ! -x "/usr/sbin/byedpi" ]; then
-        echo -e "${YELLOW}ByeDPI не найден. Попытка установки...${NC}"
+        print_color "$YELLOW" "ByeDPI не найден. Попытка установки..."
         
         if command -v opkg >/dev/null 2>&1; then
-            opkg update
-            if opkg install byedpi; then
-                echo -e "${GREEN}✓ ByeDPI успешно установлен${NC}"
+            if opkg update >/dev/null 2>&1 && opkg install byedpi >/dev/null 2>&1; then
+                print_color "$GREEN" "✓ ByeDPI успешно установлен"
             else
-                echo -e "${RED}✗ Не удалось установить ByeDPI через opkg${NC}"
-                echo -e "${YELLOW}Установите ByeDPI вручную:${NC}"
+                print_color "$RED" "✗ Не удалось установить ByeDPI через opkg"
+                echo "Установите ByeDPI вручную:"
                 echo "1. Скачайте с https://github.com/DPITrickster/ByeDPI-OpenWrt"
                 echo "2. Установите: opkg install byedpi_*.ipk"
             fi
         else
-            echo -e "${RED}✗ opkg не найден. Установите ByeDPI вручную.${NC}"
+            print_color "$RED" "✗ opkg не найден. Установите ByeDPI вручную."
         fi
     else
-        echo -e "${GREEN}✓ ByeDPI уже установлен${NC}"
+        print_color "$GREEN" "✓ ByeDPI уже установлен"
     fi
 }
 
 # Настройка автозапуска
 setup_autostart() {
-    echo -e "${BLUE}Настройка автозапуска...${NC}"
+    print_color "$BLUE" "Настройка автозапуска..."
     
     if [ -x "$INIT_DIR/byedpi" ]; then
         "$INIT_DIR/byedpi" enable
-        echo -e "${GREEN}✓ Сервис добавлен в автозапуск${NC}"
+        print_color "$GREEN" "✓ Сервис добавлен в автозапуск"
         
         # Запускаем сервис
-        read -p "Запустить ByeDPI сейчас? (Y/n): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
-            "$INIT_DIR/byedpi" start
-            echo -e "${GREEN}✓ Сервис запущен${NC}"
-        fi
+        printf "Запустить ByeDPI сейчас? (Y/n): "
+        read -r reply
+        case "$reply" in
+            [Nn]*) ;;
+            *)
+                "$INIT_DIR/byedpi" start
+                print_color "$GREEN" "✓ Сервис запущен"
+                ;;
+        esac
     else
-        echo -e "${RED}✗ Не удалось настроить автозапуск${NC}"
+        print_color "$RED" "✗ Не удалось настроить автозапуск"
     fi
 }
 
 # Создание симлинков для LuCI
 create_luci_symlinks() {
-    echo -e "${BLUE}Создание симлинков для LuCI...${NC}"
+    print_color "$BLUE" "Создание симлинков для LuCI..."
     
     # Проверяем, есть ли директория applications
     if [ -d "/usr/share/luci/menu.d" ]; then
         # Создаем симлинк для меню
         ln -sf "$CONTROLLER_DIR/byedpi.lua" "/usr/share/luci/menu.d/luci-app-byedpi.json" 2>/dev/null || true
-        echo -e "${GREEN}✓ Симлинк меню создан${NC}"
+        print_color "$GREEN" "✓ Симлинк меню создан"
     fi
     
     # Обновляем кэш LuCI
     if [ -x "/etc/init.d/rpcd" ]; then
-        /etc/init.d/rpcd restart
-        echo -e "${GREEN}✓ RPC сервис перезапущен${NC}"
+        /etc/init.d/rpcd restart >/dev/null 2>&1
+        print_color "$GREEN" "✓ RPC сервис перезапущен"
     fi
     
     if [ -x "/etc/init.d/uhttpd" ]; then
-        /etc/init.d/uhttpd restart
-        echo -e "${GREEN}✓ Веб-сервер перезапущен${NC}"
+        /etc/init.d/uhttpd restart >/dev/null 2>&1
+        print_color "$GREEN" "✓ Веб-сервер перезапущен"
     fi
 }
 
 # Проверка установки
 verify_installation() {
-    echo -e "\n${BLUE}Проверка установки...${NC}"
+    print_color "$BLUE" "Проверка установки..."
     
     local errors=0
     
-    echo -n "1. Контроллер LuCI: "
+    echo "1. Контроллер LuCI: "
     if [ -f "$CONTROLLER_DIR/byedpi.lua" ]; then
-        echo -e "${GREEN}OK${NC}"
+        print_color "$GREEN" "   OK"
     else
-        echo -e "${RED}FAIL${NC}"
-        errors=$((errors+1))
+        print_color "$RED" "   FAIL"
+        errors=$((errors + 1))
     fi
     
-    echo -n "2. CBI модель: "
+    echo "2. CBI модель: "
     if [ -f "$MODEL_DIR/byedpi.lua" ]; then
-        echo -e "${GREEN}OK${NC}"
+        print_color "$GREEN" "   OK"
     else
-        echo -e "${RED}FAIL${NC}"
-        errors=$((errors+1))
+        print_color "$RED" "   FAIL"
+        errors=$((errors + 1))
     fi
     
-    echo -n "3. Init скрипт: "
+    echo "3. Init скрипт: "
     if [ -x "$INIT_DIR/byedpi" ]; then
-        echo -e "${GREEN}OK${NC}"
+        print_color "$GREEN" "   OK"
     else
-        echo -e "${RED}FAIL${NC}"
-        errors=$((errors+1))
+        print_color "$RED" "   FAIL"
+        errors=$((errors + 1))
     fi
     
-    echo -n "4. Конфигурация: "
+    echo "4. Конфигурация: "
     if [ -f "$CONFIG_DIR/byedpi" ]; then
-        echo -e "${GREEN}OK${NC}"
+        print_color "$GREEN" "   OK"
     else
-        echo -e "${RED}FAIL${NC}"
-        errors=$((errors+1))
+        print_color "$RED" "   FAIL"
+        errors=$((errors + 1))
     fi
     
-    echo -n "5. Скрипт автоподбора: "
+    echo "5. Скрипт автоподбора: "
     if [ -x "$USR_BIN_DIR/byedpi-autodetect" ]; then
-        echo -e "${GREEN}OK${NC}"
+        print_color "$GREEN" "   OK"
     else
-        echo -e "${RED}FAIL${NC}"
-        errors=$((errors+1))
+        print_color "$RED" "   FAIL"
+        errors=$((errors + 1))
     fi
     
     if [ $errors -eq 0 ]; then
-        echo -e "\n${GREEN}✓ Установка завершена успешно!${NC}"
+        print_color "$GREEN" "✓ Установка завершена успешно!"
     else
-        echo -e "\n${YELLOW}⚠ Установка завершена с $errors ошибками${NC}"
+        print_color "$YELLOW" "⚠ Установка завершена с $errors ошибками"
     fi
 }
 
 # Показ информации после установки
 show_post_install_info() {
-    echo -e "\n${BLUE}========================================${NC}"
-    echo -e "${GREEN}luci-app-byedpi-advanced установлен!${NC}"
-    echo -e "${BLUE}========================================${NC}"
     echo ""
-    echo -e "${YELLOW}Инструкция по использованию:${NC}"
+    print_color "$BLUE" "========================================"
+    print_color "$GREEN" "luci-app-byedpi-advanced установлен!"
+    print_color "$BLUE" "========================================"
+    echo ""
+    print_color "$YELLOW" "Инструкция по использованию:"
     echo "1. Откройте веб-интерфейс LuCI: http://192.168.1.1"
     echo "2. Перейдите: Services → ByeDPI Advanced"
     echo "3. Включите автоопределение DPI"
     echo "4. Нажмите 'Start Auto-detection'"
     echo ""
-    echo -e "${YELLOW}Команды для управления:${NC}"
+    print_color "$YELLOW" "Команды для управления:"
     echo "• Запуск сервиса: /etc/init.d/byedpi start"
     echo "• Остановка сервиса: /etc/init.d/byedpi stop"
     echo "• Автоподбор параметров: /usr/sbin/byedpi-autodetect"
     echo "• Тестирование: /etc/init.d/byedpi test"
     echo ""
-    echo -e "${YELLOW}Логи:${NC}"
+    print_color "$YELLOW" "Логи:"
     echo "• Лог автоподбора: /tmp/byedpi-autodetect.log"
     echo "• Лог сервиса: /var/log/byedpi.log"
     echo ""
-    echo -e "${BLUE}========================================${NC}"
+    print_color "$BLUE" "========================================"
 }
 
 # Основная функция
 main() {
-    echo -e "${GREEN}"
-    echo "╔══════════════════════════════════════╗"
-    echo "║  luci-app-byedpi-advanced Installer  ║"
-    echo "║         для OpenWrt 24+              ║"
-    echo "╚══════════════════════════════════════╝"
-    echo -e "${NC}"
+    print_color "$GREEN" "╔══════════════════════════════════════╗"
+    print_color "$GREEN" "║  luci-app-byedpi-advanced Installer  ║"
+    print_color "$GREEN" "║         для OpenWrt 24+              ║"
+    print_color "$GREEN" "╚══════════════════════════════════════╝"
     
     check_root
     check_openwrt
     check_dependencies
     
     echo ""
-    echo -e "${YELLOW}Начинаю установку...${NC}"
+    print_color "$YELLOW" "Начинаю установку..."
     echo ""
     
     create_directories
@@ -399,12 +395,12 @@ case "$1" in
         exit 0
         ;;
     --uninstall)
-        echo -e "${YELLOW}Запуск удаления...${NC}"
+        print_color "$YELLOW" "Запуск удаления..."
         # TODO: Добавить функцию удаления
         exit 0
         ;;
     --update)
-        echo -e "${YELLOW}Запуск обновления...${NC}"
+        print_color "$YELLOW" "Запуск обновления..."
         # TODO: Добавить функцию обновления
         exit 0
         ;;
