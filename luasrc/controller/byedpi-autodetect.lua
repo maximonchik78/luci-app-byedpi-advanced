@@ -9,7 +9,7 @@ LOG="/tmp/byedpi-autodetect.log"
 PIDFILE="/var/run/byedpi-autodetect.pid"
 LOCKFILE="/var/lock/byedpi-autodetect.lock"
 
-# Функция логирования
+-- Функция логирования
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG"
     logger -t "byedpi-autodetect" "$1"
